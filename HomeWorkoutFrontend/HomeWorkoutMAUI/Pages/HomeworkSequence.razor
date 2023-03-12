@@ -1,0 +1,198 @@
+﻿@using HomeWorkoutModels.Models;
+@using Newtonsoft.Json;
+@using SharedUILibrary.Components;
+@inject HomeworkSequenceService HomeWorkSequenceService
+@inject ExerciseService ExerciseService
+@page "/homeworkSequence"
+<GridRow Type="flex" Justify="center">
+    <Space Size="@size" Direction="DirectionVHType.Vertical" Align="center">
+        @if (homeworkSequenceModel != null && exerciseList.Count > 0)
+        {
+            <SpaceItem>
+                <Text Strong>
+                    @($"Sequence estimated time: {homeworkSequenceModel.EstimatedTimeInMinutes} minutes")
+                </Text>
+            </SpaceItem>
+            <SpaceItem>
+                <Text Strong>
+                    <a href='@string.Format("http://127.0.0.1:5000/{0}",userBasicDetail.Id)'>Homework Statistics</a>
+                </Text>
+            </SpaceItem>
+            @foreach (var exercise in exerciseList)
+            {
+                <GridCol>
+                    <SpaceItem>
+                        <Card Style="width:300px" Title="@exercise.Name" Id=@($"{exercise.Id}")>
+                            <Body>
+                                <Space Size="@size" Direction="DirectionVHType.Vertical">
+                                    <SpaceItem>
+                                        <Image Src="@exercise.ImageSource" />
+                                    </SpaceItem>
+                                    <SpaceItem>
+                                        <Descriptions>
+                                            <DescriptionsItem Title="Seconds">
+                                                @(
+                                                    homeworkSequenceModel
+                                                    .HomeworkICollection
+                                                    .Single(x => x.ExerciseModelId == exercise.Id)
+                                                    .Seconds
+                                                    )
+                                            </DescriptionsItem>
+                                            <DescriptionsItem Title="Number of times">
+                                                @(
+                                                    homeworkSequenceModel
+                                                    .HomeworkICollection
+                                                    .Single(x => x.ExerciseModelId == exercise.Id)
+                                                    .NumberOfTimes
+                                                    )
+                                            </DescriptionsItem>
+                                        </Descriptions>
+                                    </SpaceItem>
+                                    <SpaceItem>
+                                        <Button OnClick="()=> StartStopwatch(exercise)">Start exercise</Button>
+                                    </SpaceItem>
+                                </Space>
+                            </Body>
+                            <Extra>
+                                @if (isPhysio())
+                                {
+                                    <Text>Edit</Text>
+                                }
+                            </Extra>
+                        </Card>
+                    </SpaceItem>
+                </GridCol>
+            }
+        }
+        else
+        {
+            <Text>You do not have homework :)</Text>
+        }
+        <Modal Title="@modalTitle"
+               Visible="_visible"
+               OnCancel="@HandleCancel"
+               Footer=null>
+            @if (!sequenceIsDone)
+            {
+                <Stopwatch IsStarted=isStarted
+                       Counter=counter
+                       NumberOfTimes=numberOfTimes
+                       ExerciseModel="currentExercise"
+                       ExerciseFinished="@HandleExerciseFinished">
+                </Stopwatch>
+            }
+            else
+            {
+                <Result Status="success"
+                    Title="Sequence finished"
+                    SubTitle="Congratulations on improving your form!">
+                </Result>
+            }
+        </Modal>
+    </Space>
+</GridRow>
+
+@code {
+    private string size = "large";
+    private HomeworkSequenceModel homeworkSequenceModel;
+    private List<ExerciseModel> exerciseList = new List<ExerciseModel>();
+    UserBasicDetail userBasicDetail;
+    private bool isStarted = false;
+    private int counter;
+    bool _visible = false;
+    private int numberOfTimes;
+    private ExerciseModel currentExercise;
+    private bool exerciseFinished;
+    private int currentPlaceInSequence;
+    private bool sequenceIsDone = false;
+    private string modalTitle;
+
+    private bool isPhysio()
+    {
+        if (userBasicDetail != null)
+        {
+            return userBasicDetail.Role == "physiotherapist" ? true : false;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    private string currentExerciseName()
+    {
+        if (currentExercise == null)
+        {
+            return "";
+        }
+        else
+        {
+            return currentExercise.Name;
+        }
+
+    }
+    private void HandleCancel(MouseEventArgs e)
+    {
+        _visible = false;
+        isStarted = false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Run(() => PrepareHomeWorkoutSequenceModel());
+    }
+
+    private async Task PrepareHomeWorkoutSequenceModel()
+    {
+        string userDetailsStr = await SecureStorage.GetAsync(nameof(Setting.UserBasicDetail));
+        userBasicDetail = JsonConvert.DeserializeObject<UserBasicDetail>(userDetailsStr);
+
+        if (userBasicDetail != null)
+        {
+            homeworkSequenceModel = await HomeWorkSequenceService.GetHomeworkSequenceByUserId(userBasicDetail.Id);       
+        }
+       
+        if (homeworkSequenceModel != null)
+        {
+            foreach (var homework in homeworkSequenceModel.HomeworkICollection)
+            {
+                exerciseList.Add(ExerciseService.GetExerciseModel(homework.ExerciseModelId));
+            }
+        }    
+    }
+
+    public void HandleExerciseFinished()
+    {
+        if (homeworkSequenceModel.HomeworkICollection.Count.CompareTo(currentPlaceInSequence) != 0)
+        {
+            int nextExerciseId = homeworkSequenceModel.HomeworkICollection.SingleOrDefault(x => x.PlaceInSequence == currentPlaceInSequence + 1).ExerciseModelId;
+            if (nextExerciseId != null)
+            {
+                ExerciseModel nextExercise = exerciseList.Single(x => x.Id == nextExerciseId);
+
+                if (nextExercise != null)
+                {
+                    StartStopwatch(nextExercise);
+                }
+            }
+        }
+        else
+        {
+            sequenceIsDone = true;
+            modalTitle = "Finished";
+
+        }
+    }
+
+    private void StartStopwatch(ExerciseModel exercise)
+    {
+        isStarted = true;
+        counter = homeworkSequenceModel.HomeworkICollection.Single(x => x.ExerciseModelId == exercise.Id).Seconds;
+        numberOfTimes = homeworkSequenceModel.HomeworkICollection.Single(x => x.ExerciseModelId == exercise.Id).NumberOfTimes;
+        currentPlaceInSequence = homeworkSequenceModel.HomeworkICollection.Single(x => x.ExerciseModelId == exercise.Id).PlaceInSequence;
+        currentExercise = exercise;
+        modalTitle = currentExerciseName();
+        _visible = true;
+    }
+
+}

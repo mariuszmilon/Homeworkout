@@ -1,0 +1,138 @@
+﻿@page "/addSequence/{Id:int}"
+@using HomeWorkoutModels.Models;
+@inject ExerciseService ExerciseService
+@inject HomeworkSequenceService HomeworkSequenceService
+
+<GridRow Type="flex" Justify="center">
+    <Space Size="@size" Direction="DirectionVHType.Vertical" Align="center">
+        <SpaceItem>
+            <Text Strong>
+                Add exercise to sequence
+            </Text>
+        </SpaceItem>
+        <SpaceItem>
+            <AntList Style="width:300px" DataSource="@exerciseList" TItem="ExerciseModel" Split=true ItemLayout="@ListItemLayout.Vertical">
+                <ChildContent>
+                    <ListItem OnClick="()=>ItemClick(context)">
+                        <Card>
+                            <Body>
+                                <ListItemMeta Description=@context.Name>
+                                    <TitleTemplate>
+                                        <Image Style="width:150px" Src="@context.ImageSource"></Image>
+                                    </TitleTemplate>
+                                </ListItemMeta>
+                                <Space Size="size" Direction="DirectionVHType.Vertical" Align="center">
+                                    <SpaceItem>
+                                        <Space>
+                                            <SpaceItem>
+                                                <Text>
+                                                    number of times
+                                                </Text>
+                                                <AntDesign.InputNumber @bind-Value="@exerciseDictionary[context].NumberOfTimes" Min="0"></AntDesign.InputNumber>
+                                            </SpaceItem>
+                                            <SpaceItem>
+                                                <Text>
+                                                    number of seconds
+                                                </Text>
+                                                <AntDesign.InputNumber @bind-Value="@exerciseDictionary[context].Seconds" Min="0"></AntDesign.InputNumber>
+                                            </SpaceItem>
+                                        </Space>
+                                    </SpaceItem>
+                                    <SpaceItem>
+                                        <Text>@LabelText(context)</Text>
+                                    </SpaceItem>
+                                </Space>
+                            </Body>
+                        </Card>
+                    </ListItem>
+                </ChildContent>
+            </AntList>
+        </SpaceItem> 
+        <SpaceItem>
+            <Button OnClick="PostSequence">Post sequence</Button>
+        </SpaceItem>
+        <SpaceItem>
+            <AntList DataSource="choosenExerciseList">
+                <ChildContent>
+                    <ListItem>
+                        <Image Style = "width:50px" Src="@context.ImageSource"></Image>
+                    </ListItem>
+                </ChildContent>
+            </AntList>
+        </SpaceItem>
+    </Space>
+</GridRow>
+
+
+
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+    private string size = "large";
+    private List<ExerciseModel> exerciseList;
+    private List<ExerciseModel> choosenExerciseList;
+    Dictionary<ExerciseModel, HomeworkModel> exerciseDictionary = new Dictionary<ExerciseModel, HomeworkModel>();
+    private HomeworkSequenceModel homeworkSequence;
+    private bool showModal = false;
+    private int placeInSequence = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        choosenExerciseList = new List<ExerciseModel>();
+        homeworkSequence = new HomeworkSequenceModel();
+        homeworkSequence.UserId = Id;
+        homeworkSequence.HomeworkICollection = new List<HomeworkModel>();
+        exerciseList = ExerciseService.GetExerciseModels();
+        foreach (var exercise in exerciseList)
+        {
+            HomeworkModel homeworkModel = new HomeworkModel();
+            homeworkModel.ExerciseModelId = exercise.Id;            
+            exerciseDictionary.Add(exercise, homeworkModel);
+        }
+    }
+
+    void ItemClick(ExerciseModel exercise)
+    {
+        if (!ExerciseAdded(exercise))
+        {
+            placeInSequence += 1;
+            HomeworkModel homeworkModel = exerciseDictionary[exercise];
+            homeworkModel.PlaceInSequence = placeInSequence;
+            homeworkSequence.HomeworkICollection.Add(homeworkModel);
+            choosenExerciseList.Add(exercise);
+        }
+        else
+        {
+            placeInSequence -= 1;
+            homeworkSequence.HomeworkICollection.Remove(exerciseDictionary[exercise]);
+            choosenExerciseList.Remove(exercise);
+        }       
+    }
+
+    bool ExerciseAdded(ExerciseModel exercise)
+    {
+        if (homeworkSequence.HomeworkICollection != null && homeworkSequence.HomeworkICollection.Contains(exerciseDictionary[exercise]))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    string LabelText(ExerciseModel exercise)
+    {
+        if (ExerciseAdded(exercise))
+        {
+            return "Click card to remove exercise from sequence";
+        }
+        else
+        {
+            return "Click card to add exercose to sequence";
+        }
+    }
+
+    void PostSequence()
+    {
+        HomeworkSequenceService.AddHomeworkSequence(homeworkSequence);
+    }
+}

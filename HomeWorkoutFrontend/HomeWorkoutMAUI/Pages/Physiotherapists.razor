@@ -1,0 +1,103 @@
+﻿@using HomeWorkoutModels.Models;
+@using Newtonsoft.Json;
+@inject PatientService PatientService
+@inject NavigationManager navigationManager
+@page "/physiotherapists"
+
+<GridRow Type="flex" Justify="center">
+    <Space Size="@size" Direction="DirectionVHType.Vertical" Align="center">
+        @if (physiotherapistsList != null && physiotherapistsList.Count > 0)
+        {
+                <SpaceItem>
+                    <Text Strong>
+                            Select physiotherapist
+                    </Text>
+                </SpaceItem>
+            @foreach (var physiotherapist in physiotherapistsList)
+            {         
+                <SpaceItem>
+                    <Card Style="width:300px" Title="@($"{physiotherapist.Name} {physiotherapist.Surname}")">
+                        <Extra>
+                            <Button OnClick="() =>ShowModal(physiotherapist.Id)">Choose</Button>
+                            <Modal Title="@("Choose")"
+                           Visible="@_visible"
+                           OnOk="HandleOk"
+                           OnCancel="@HandleCancel"
+                           ConfirmLoading="@_confirmLoading">
+                                <p>@_modalText</p>
+                            </Modal>
+                        </Extra>
+                    </Card>
+                </SpaceItem>
+            }    
+        }
+        else
+        {
+            <SpaceItem>
+                <Text Strong>
+                    No physiotherapists available
+                </Text>
+            </SpaceItem>
+        }
+    </Space>
+</GridRow>
+
+@code {
+    private List<UserBasicDetail> physiotherapistsList;
+    private string size = "large";
+    RenderFragment avatar = @<Avatar Src="https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png"></Avatar>;
+    public UserBasicDetail UserBasicDetail { get; set; }
+
+    UserBasicDetail userBasicDetail;
+
+    public string idToPick;
+    bool _visible = false;
+    bool _confirmLoading = false;
+    string _modalText = "Are you sure you want to choose this physiotherapist?";
+
+    private void ShowModal(string id)
+    {
+        _visible = true;
+        idToPick = id;
+
+    }
+
+    private void HandleCancel(MouseEventArgs e)
+    {
+        _visible = false;
+    }
+
+    private async Task HandleOk()
+    {
+        _modalText = "Are you sure you want to choose this physiotherapist?";
+        _confirmLoading = true;
+        StateHasChanged();
+        await PatientService.ChoosePhysiotherapist(userBasicDetail.Id, idToPick);
+        _visible = false;
+        _confirmLoading = false;
+        navigationManager.NavigateTo("/exercise", forceLoad: true);
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Run(() => PreparePhysiotherapists());
+    }
+
+    private async Task PreparePhysiotherapists()
+    {
+        physiotherapistsList = new List<UserBasicDetail>();
+        string userDetailsStr = await SecureStorage.GetAsync(nameof(Setting.UserBasicDetail));
+        userBasicDetail = JsonConvert.DeserializeObject<UserBasicDetail>(userDetailsStr);
+
+        if (userBasicDetail != null)
+        {
+            physiotherapistsList = PatientService.GetPhysiotherapists();
+        }
+    }
+
+    public void ItemClick(string title)
+    {
+        Console.WriteLine($"item was clicked: {title}");
+    }
+}
